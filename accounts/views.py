@@ -19,6 +19,11 @@ class TestView(APIView):
         return Response(request.user.is_anonymous)
 
 
+class CurrentUserView(APIView):
+    def get(self, request, format=None):
+        return Response(UserSerializer(request.user).data)
+
+
 class RegisterView(APIView):
     def post(self, request, format=None):
         if request.user.is_anonymous:

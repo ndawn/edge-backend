@@ -4,44 +4,51 @@ import re
 from datetime import datetime
 
 from edge import config
-from django.db import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
-from commerce.models import Category, Publisher, VariantIdentifier
+from commerce.models import VariantIdentifier
 from previews.models import PublisherData, CategoryData
-from parsers.previews.performers import ItemParsePerformer
-from parsers.previews.extractors.previewsworld import (
-    PreviewsworldItemExtractor,
-    PreviewsworldVariantExtractor,
-    PreviewsworldPreviewExtractor,
-)
-from parsers.models import ParseSession
-from edge.celery import app
+from parsers.previews.performers import Performer as BasePerformer
 
 import requests
 from bs4 import BeautifulSoup
 from celery import group, chord
-from yadisk.exceptions import TooManyRequestsError
 
 
 logger = logging.getLogger()
 
 
-class PreviewsworldItemParsePerformer(ItemParsePerformer):
-    _session_meta = {
-        'mode': 'monthly',
-        'host': config.PREVIEWSWORLD_HOSTNAME,
-    }
+class Performer(BasePerformer):
+    class Meta:
+        mode = 'monthly'
+        host = 'previewsworld.com'
 
     def get_tasks(self):
         if self.urls is not None:
             return self.urls
 
+        batch = ''
+
+        if self.catalog_date is not None:
+            target_month = self.catalog_date.month - 2 if self.catalog_date.month > 2 else self.catalog_date.month + 10
+            batch = self.catalog_date.replace(month=target_month).strftime('%b%y')
+
         response = requests.get(
-            config.PREVIEWSWORLD_CATALOG_URL,
-            {'batch': self.catalog_date.strftime('%b%y') if self.catalog_date is not None else ''},
+            'https://' + self.Meta.host + '/Catalog/',
+            {'batch': batch},
         )
 
+        if response.status_code == 404:
+            self.session.delete()
+            raise LookupError('Got to the 404 page')
+
         soup = BeautifulSoup(response.content, 'lxml')
+
+        self.session.meta['date'] = datetime.strptime(
+            soup.select('.catalogDisclaimer strong')[-1].text,
+            '%B %Y',
+        ).isoformat()
+
+        self.session.save()
 
         logger.debug('PUBLISHERS: ' + str(self.publishers))
         logger.debug('CATEGORIES: ' + str(self.categories))
@@ -71,7 +78,7 @@ class PreviewsworldItemParsePerformer(ItemParsePerformer):
                 items = soup('div', search_params)
 
                 for url in list(map(
-                    lambda x: config.PREVIEWSWORLD_HOSTNAME + x.select_one('a').get('href'),
+                    lambda x: 'https://' + self.Meta.host + x.select_one('a').get('href'),
                     items,
                 )):
                     tasks.append({
@@ -87,7 +94,7 @@ class PreviewsworldItemParsePerformer(ItemParsePerformer):
         return list(map(
             lambda x: x.publisher,
             PublisherData.objects.filter(
-                site__address=config.PREVIEWSWORLD_HOSTNAME.replace('https://', '', 1),
+                site__address=Performer.Meta.host,
                 default=True,
             ),
         ))
@@ -97,7 +104,7 @@ class PreviewsworldItemParsePerformer(ItemParsePerformer):
         return list(map(
             lambda x: x.category,
             CategoryData.objects.filter(
-                site__address=config.PREVIEWSWORLD_HOSTNAME.replace('https://', '', 1),
+                site__address=Performer.Meta.host,
                 default=True,
             ),
         ))
@@ -108,12 +115,15 @@ class PreviewsworldItemParsePerformer(ItemParsePerformer):
 
         locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
 
-        response = requests.get(config.PREVIEWSWORLD_CATALOG_URL)
+        response = requests.get('https://' + Performer.Meta.host + '/Catalog/')
 
         date = datetime.strptime(
             BeautifulSoup(response.content, 'lxml').select_one('#CatalogListingPageTitle').next.strip(),
             'PREVIEWS %B %Y',
         )
+
+        target_month = date.month + 2 if date.month < 10 else date.month - 10
+        date = date.replace(month=target_month)
 
         locale.setlocale(locale.LC_TIME, lc)
 
@@ -139,7 +149,7 @@ class PreviewsworldItemParsePerformer(ItemParsePerformer):
 
             follow_response = requests.get(follow_url)
 
-            add_ids, resolved_response = PreviewsworldItemParsePerformer.get_identifiers_and_response(follow_response)
+            add_ids, resolved_response = Performer.get_identifiers_and_response(follow_response)
 
             ids.update(add_ids)
 
@@ -155,7 +165,7 @@ class PreviewsworldItemParsePerformer(ItemParsePerformer):
         if series_btn is not None:
             logger.debug('Found series link')
 
-            response = requests.get(config.PREVIEWSWORLD_HOSTNAME + series_btn['href'])
+            response = requests.get('https://' + Performer.Meta.host + series_btn['href'])
 
             series_page = BeautifulSoup(response.content, 'lxml').select_one('.CatalogFullDetail')
 
@@ -214,138 +224,40 @@ class PreviewsworldItemParsePerformer(ItemParsePerformer):
 
             return None
 
+    @staticmethod
+    def run(**kwargs):
+        from parsers.tasks import (
+            parse_previewsworld_item as parse_item,
+            finish_previewsworld_parse as finish,
+        )
 
-def run(**kwargs):
-    performer = PreviewsworldItemParsePerformer(**kwargs)
+        performer = Performer(**kwargs)
 
-    urls = performer.get_tasks()
+        urls = performer.get_tasks()
 
-    if not urls:
-        performer.session.delete()
-        raise AttributeError('No url list found')
+        if not urls:
+            performer.session.delete()
+            raise AttributeError('No url list found')
 
-    tasks = []
+        tasks = []
 
-    if isinstance(urls[0], dict):
-        for url in urls:
-            tasks.append(parse_item.s(
-                url=url['url'],
-                session_id=performer.session.id,
-                publisher_id=url['publisher'].id,
-                category_id=url['category'].id,
-            ))
-    else:
-        for url in urls:
-            tasks.append(parse_item.s(url, performer.session.id))
+        if urls[:1] and isinstance(urls[0], dict):
+            for url in urls:
+                tasks.append(parse_item.s(
+                    url=url['url'],
+                    session_id=performer.session.id,
+                    publisher_id=url['publisher'].id,
+                    category_id=url['category'].id,
+                ))
+        else:
+            for url in urls:
+                tasks.append(parse_item.s(url, performer.session.id))
 
-    chord(group(tasks))(finish.s(session_id=performer.session.id))
+        performer.session.item_count = len(tasks)
+        performer.session.save()
 
-    return {'session_id': performer.session.id}
+        chord(group(tasks))(
+            finish.s(session_id=performer.session.id).set(link_error=[finish.si(session_id=performer.session.id)])
+        )
 
-
-@app.task(
-    name='parsers.prwld.parse',
-    throws=(ObjectDoesNotExist, ),
-    autoretry_for=(TooManyRequestsError, ),
-    max_retries=5,
-    default_retry_delay=5,
-)
-def parse_item(url, session_id, publisher_id=None, category_id=None):
-    response = requests.get(url)
-
-    soup = BeautifulSoup(response.content, 'lxml')
-
-    identifiers, response = PreviewsworldItemParsePerformer.get_identifiers_and_response(response)
-
-    if response is None:
-        raise ObjectDoesNotExist
-
-    logger.debug('Variant Identifiers found: ' + ', '.join(identifiers))
-
-    cache = {}
-
-    if publisher_id is not None:
-        cache['publisher'] = Publisher.objects.get(pk=publisher_id)
-
-    if category_id is not None:
-        cache['category'] = Category.objects.get(pk=category_id)
-
-    item_extractor = PreviewsworldItemExtractor(soup, cache=cache)
-    variant_extractor = PreviewsworldVariantExtractor(soup, cache=cache)
-    preview_extractor = PreviewsworldPreviewExtractor(soup, cache=cache)
-
-    item_instance = item_extractor.model_instance
-    variant_instance = variant_extractor.model_instance
-    preview_instance = preview_extractor.model_instance
-
-    for var_id in identifiers:
-        found_var_id = VariantIdentifier.objects.filter(identifier=var_id).first()
-
-        if found_var_id is not None:
-            logger.debug(f'Found variant by id {var_id}: {found_var_id.variant.id}')
-
-            found_variant = found_var_id.variant
-
-            for field in variant_extractor.non_null_fields:
-                setattr(found_variant, field, getattr(variant_instance, field, None))
-
-            variant = found_variant
-            item = variant.item
-
-            break
-    else:
-        logger.debug('Didn\'t find any variants by any of the extracted ids')
-
-        item = PreviewsworldItemParsePerformer.get_common_item(soup, identifiers)
-
-        if item is None:
-            item = item_instance
-
-            logger.debug('Publisher id: ' + str(publisher_id))
-            logger.debug('Category id: ' + str(category_id))
-
-            try:
-                item.publisher = item.publisher or Publisher.objects.get(id=publisher_id)
-            except Publisher.DoesNotExist:
-                item.publisher = None
-
-            try:
-                item.category = item.category or Category.objects.get(id=category_id)
-            except Category.DoesNotExist:
-                item.category = None
-
-            item.save()
-
-        variant = variant_instance
-        variant.item = item
-
-    variant.save()
-
-    preview_instance.variant = variant
-    preview_instance.session_id = session_id
-    preview_instance.save()
-
-    for identifier in identifiers:
-        try:
-            VariantIdentifier.objects.create(identifier=identifier, variant=variant)
-        except IntegrityError:
-            continue
-
-    logger.info('Parsed preview: %d' % preview_instance.id)
-
-    return {
-        'item_id': item.id,
-        'variant_id': variant.id,
-        'preview_id': preview_instance.id,
-    }
-
-
-@app.task(name='parsers.prwld.finish', ignore_result=True)
-def finish(results, session_id):
-    try:
-        session = ParseSession.objects.get(pk=session_id)
-        session.status = 'finished'
-        session.finished = datetime.now()
-        session.save()
-    except ParseSession.DoesNotExist:
-        pass
+        return {'session_id': performer.session.id}

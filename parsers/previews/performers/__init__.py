@@ -5,11 +5,13 @@ from commerce.models import Category, Publisher
 from parsers.models import ParseSession
 
 
-__all__ = ['previewsworld', 'ItemParsePerformer']
+__all__ = ['previewsworld', 'Performer']
 
 
-class ItemParsePerformer(ABC):
-    _session_meta = None
+class Performer(ABC):
+    class Meta:
+        mode = None
+        host = None
 
     def __init__(self,
                  catalog_date=None,
@@ -18,7 +20,14 @@ class ItemParsePerformer(ABC):
                  publisher_ids=None,
                  categories=None,
                  category_ids=None):
-        self.session = ParseSession.objects.create(type='previews', meta=self._session_meta)
+        self.session = ParseSession.objects.create(
+            type='previews',
+            meta={
+                'mode': self.Meta.mode,
+                'host': self.Meta.host,
+                'date': None,
+            }
+        )
 
         self.catalog_date = self.urls = self.publishers = None
 
@@ -63,4 +72,9 @@ class ItemParsePerformer(ABC):
     @staticmethod
     @abstractmethod
     def get_last_available_date():
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def run():
         pass

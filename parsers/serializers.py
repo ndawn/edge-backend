@@ -1,20 +1,30 @@
 from rest_framework import serializers
-from parsers.models import ParseSession
+from parsers.models import ParseSession, Mode, Site
 from django_celery_results.models import TaskResult
 
 
-class ParseSessionSerializer(serializers.HyperlinkedModelSerializer):
-    preview_count = serializers.SerializerMethodField()
+class ModeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Mode
+        fields = ('id', 'name', 'verbose_names', 'default_source')
 
+
+class SiteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Site
+        fields = (
+            'id',
+            'address',
+        )
+
+
+class ParseSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ParseSession
-        fields = ('url', 'id', 'started', 'finished', 'status', 'meta', 'preview_count')
-
-    def get_preview_count(self, obj):
-        return obj.preview_set.count()
+        fields = ('id', 'started', 'finished', 'status', 'meta', 'item_count')
 
 
-class TaskResultSerializer(serializers.HyperlinkedModelSerializer):
+class TaskResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskResult
-        fields = ('url', 'id', 'task_id', 'task_name', 'status', 'meta', 'result', 'traceback')
+        fields = ('id', 'task_id', 'task_name', 'status', 'meta', 'result', 'traceback')

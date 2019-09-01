@@ -2,6 +2,7 @@ import sentry_sdk
 import yadisk
 from sentry_sdk.integrations.django import DjangoIntegration
 import cloudinary
+import boto3
 
 
 SENTRY_TOKEN = ''
@@ -67,11 +68,6 @@ DUMMY = {
 
 PHASH_IDENTITY_THRESHOLD = 0.75
 
-PREVIEWSWORLD_HOSTNAME = 'https://previewsworld.com'
-PREVIEWSWORLD_CATALOG_URL = PREVIEWSWORLD_HOSTNAME + '/Catalog/'
-
-MIDTOWNCOMICS_HOSTNAME = 'https://midtowncomics.com'
-
 YADISK_CLIENT_ID = ''
 YADISK_CLIENT_SECRET = ''
 YADISK_REFRESH_TOKEN = ''
@@ -80,3 +76,14 @@ YADISK_COVER_PATH = 'cover'
 
 YADISK = yadisk.YaDisk(id=YADISK_CLIENT_ID, secret=YADISK_CLIENT_SECRET)
 YADISK.token = YADISK.refresh_token(YADISK_REFRESH_TOKEN).access_token
+
+YC_ENDPOINT_URL = 'https://storage.yandexcloud.net'
+YC_BUCKET_NAME = 'cover'
+YC_SESSION = boto3.session.Session().client(
+    service_name='s3',
+    endpoint_url=YC_ENDPOINT_URL,
+)
+
+CELERY_BROKER_URL = ''
+
+GOOGLE_API_CREDENTIALS = {}

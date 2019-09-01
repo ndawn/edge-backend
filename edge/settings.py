@@ -1,4 +1,6 @@
 import os
+from datetime import timedelta
+from multiprocessing import cpu_count
 from edge import config
 
 from kombu import Queue, Exchange
@@ -26,12 +28,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_extensions',
     'rest_framework',
+    'django_filters',
     'django_celery_results',
-    'accounts',
-    'commerce',
-    'previews',
-    'parsers',
-    'third_party_publishers',
+    'accounts.apps.AccountsConfig',
+    'commerce.apps.CommerceConfig',
+    'previews.apps.PreviewsConfig',
+    'parsers.apps.ParsersConfig',
+    'third_party_publishers.apps.ThirdPartyPublishersConfig',
 ]
 
 MIDDLEWARE = [
@@ -119,11 +122,21 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+    ),
+}
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
 }
 
 
 CELERY_TASK_RESULT_EXPIRES = 86400
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
+CELERY_TASK_DEFAULT_RATE_LIMIT = f'{300 // cpu_count()}/m'
+CELERY_BROKER_URL = config.CELERY_BROKER_URL
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_QUEUES = (
     Queue('default', Exchange('default'), routing_key='default'),

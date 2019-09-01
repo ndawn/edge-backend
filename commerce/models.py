@@ -7,7 +7,7 @@ from accounts.models import User
 from edge import config
 from django.dispatch import receiver
 from django.db.models.signals import pre_delete
-from utils.yadisk import upload_to_yadisk, delete_from_yadisk
+from utils.yadisk import YadiskUploader
 
 import requests
 import cloudinary
@@ -92,7 +92,7 @@ class Category(models.Model):
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
 
-    title = models.CharField(
+    name = models.CharField(
         default='',
         max_length=32,
         verbose_name='Название',
@@ -155,7 +155,7 @@ class Category(models.Model):
         return tree_list
 
     def get_parent_chain(self):
-        return [self.title] + (self.parent.get_parent_chain() if self.parent is not None else [])
+        return [self.name] + (self.parent.get_parent_chain() if self.parent is not None else [])
 
     def __str__(self):
         return ' -> '.join(reversed(self.get_parent_chain()))
@@ -422,13 +422,13 @@ class Cover(models.Model):
         logger.debug('Loaded cover: ' + data['id'])
 
         try:
-            disk_data = upload_to_yadisk(data['url'], data['id'], '', data)
+            disk_data = YadiskUploader.upload(data['url'], data['id'], '', data)
 
             cover.hosted_url = disk_data.file
             cover.save()
         except yadisk.exceptions.YaDiskError as exc:
+            logger.error(exc.__class__.__name__ + ' occured while uploading file to YaDisk')
             raise
-            # logger.error(exc.__class__.__name__ + ' occured while uploading file to YaDisk')
 
         return cover
 
@@ -441,7 +441,7 @@ class Cover(models.Model):
 def destroy_image(**kwargs):
     if 'instance' in kwargs:
         cloudinary.uploader.destroy(kwargs['instance'].id)
-        delete_from_yadisk(kwargs['instance'].id, '')
+        YadiskUploader.delete(kwargs['instance'].id, '')
 
 
 class Variant(models.Model):
@@ -496,7 +496,7 @@ class Variant(models.Model):
         verbose_name='Вес',
     )
 
-    image = models.OneToOneField(
+    image = models.ForeignKey(
         Cover,
         on_delete=models.SET(Cover.dummy),
         null=True,

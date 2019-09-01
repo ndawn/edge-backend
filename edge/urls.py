@@ -2,11 +2,12 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from accounts.views import UserViewSet
-import accounts.auth_urls
-import commerce.views
+import accounts.urls
 import commerce.urls
+import commerce.views
 import parsers.urls
 import parsers.views
+import previews.urls
 import previews.views
 
 
@@ -18,15 +19,14 @@ router.register('publisher', commerce.views.PublisherViewSet)
 router.register('item', commerce.views.ItemViewSet)
 router.register('order', commerce.views.OrderViewSet)
 router.register('parse_session', parsers.views.ParseSessionViewSet)
-router.register('parse_publisher', previews.views.PublisherDataViewSet)
-router.register('parse_category', previews.views.CategoryDataViewSet)
 router.register('preview', previews.views.PreviewViewSet)
+router.register('site', parsers.views.SiteViewSet)
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/auth/', include(accounts.auth_urls)),
-    path('api/commerce/', include(commerce.urls)),
-    path('api/parsers/', include(parsers.urls)),
-    path('api/', include(router.urls)),
-]
+    path('auth/', include(accounts.urls)),
+    path('commerce/', include(commerce.urls)),
+    path('parsers/', include(parsers.urls)),
+    path('previews/', include(previews.urls)),
+] + router.urls

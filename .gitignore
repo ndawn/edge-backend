@@ -2,3 +2,5 @@
 __pycache__
 .git
 *.pyc
+edge/config.py
+utils/google/credentials.json

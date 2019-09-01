@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from previews.models import Preview, PublisherData, CategoryData
 from commerce.serializers import PriceMapSerializer, PublisherSerializer, CategorySerializer
+from parsers.serializers import SiteSerializer
 
 
 class PreviewSerializer(serializers.HyperlinkedModelSerializer):
@@ -21,34 +22,24 @@ class PreviewSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class PublisherDataSerializer(serializers.ModelSerializer):
-    address = serializers.SerializerMethodField()
-    publisher = PublisherSerializer()
+    publisher = PublisherSerializer(read_only=True)
 
     class Meta:
         model = PublisherData
         fields = (
             'id',
-            'address',
             'default',
             'publisher',
         )
 
-    def get_address(self, obj):
-        return obj.site.address
-
 
 class CategoryDataSerializer(serializers.ModelSerializer):
-    address = serializers.SerializerMethodField()
-    category = CategorySerializer
+    category = CategorySerializer(read_only=True)
 
     class Meta:
         model = CategoryData
         fields = (
             'id',
-            'address',
             'default',
             'category',
         )
-
-    def get_address(self, obj):
-        return obj.site.address

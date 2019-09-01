@@ -1,7 +1,6 @@
 from django.db import models
 from commerce.models import Category, Publisher, Variant, PriceMap
-from parsers.models import ParseSession
-from django.contrib.postgres.fields import JSONField
+from parsers.models import Site, ParseSession
 
 
 class Preview(models.Model):
@@ -17,6 +16,7 @@ class Preview(models.Model):
     variant = models.OneToOneField(
         Variant,
         on_delete=models.CASCADE,
+        unique=False,
         blank=True,
         verbose_name='Товар',
     )
@@ -59,21 +59,6 @@ class Preview(models.Model):
         null=True,
         max_length=20,
     )
-
-
-class Site(models.Model):
-    class Meta:
-        verbose_name = 'Адрес сайта'
-        verbose_name_plural = 'Адреса сайтов'
-
-    address = models.CharField(
-        unique=True,
-        max_length=32,
-        verbose_name='Имя хоста',
-    )
-
-    def __str__(self):
-        return self.address
 
 
 class PublisherData(models.Model):
@@ -169,4 +154,4 @@ class CategoryData(models.Model):
     )
 
     def __str__(self):
-        return self.category.title + ' @ ' + self.site.address
+        return self.category.name + ' @ ' + self.site.address

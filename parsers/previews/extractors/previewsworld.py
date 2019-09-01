@@ -2,7 +2,6 @@ from datetime import datetime
 import logging
 
 from parsers.previews.extractors.base import ItemExtractor, VariantExtractor, PreviewExtractor
-from edge import config
 from django.core.exceptions import ObjectDoesNotExist
 from commerce.models import PriceMap, Publisher, Cover
 
@@ -162,7 +161,7 @@ class PreviewsworldVariantExtractor(VariantExtractor):
         return self.get_price_map().weight
 
     def get_image(self):
-        image_url = config.PREVIEWSWORLD_HOSTNAME + self.tree.select_one('#MainContentImage').get('src', '')
+        image_url = 'https://previewsworld.com' + self.tree.select_one('#MainContentImage').get('src', '')
 
         return Cover.load(image_url)
 
@@ -175,15 +174,21 @@ class PreviewsworldPreviewExtractor(PreviewExtractor):
         return self.tree.url
 
     def get_price_map(self):
+        logger.info(f'SELF.CACHED_DATA: {self.cached_data}')
+
         if 'price_map' in self.cached_data:
             return self.cached_data['price_map']
 
         price = getattr(self.tree.select_one('.SRP'), 'text', None)
 
+        logger.info(f'PRICE: {price}')
+
         if price is not None and 'N/A' not in price and 'PI' not in price:
             price = float(price[price.find('$') + 1:])
 
             price_map = PriceMap.objects.filter(usd=price).first()
+
+            logger.info(f'PRICE_MAP: {price_map}')
 
             if price_map is not None:
                 self.cached_data['price_map'] = price_map
