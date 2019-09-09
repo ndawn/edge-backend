@@ -136,7 +136,10 @@ class PreviewsworldVariantExtractor(VariantExtractor):
         if 'price_map' in self.cached_data:
             return self.cached_data['price_map']
 
-        price = getattr(self.tree.select_one('.SRP'), 'text', None)
+        if 'price_string' in self.cached_data:
+            price = self.cached_data['price_string']
+        else:
+            price = getattr(self.tree.select_one('.SRP'), 'text', None)
 
         if price is not None and 'N/A' not in price and 'PI' not in price:
             price = float(price[price.find('$') + 1:])
@@ -174,21 +177,21 @@ class PreviewsworldPreviewExtractor(PreviewExtractor):
         return self.tree.url
 
     def get_price_map(self):
-        logger.info(f'SELF.CACHED_DATA: {self.cached_data}')
+        print(f'SELF.CACHED_DATA: {self.cached_data}')
 
         if 'price_map' in self.cached_data:
             return self.cached_data['price_map']
 
         price = getattr(self.tree.select_one('.SRP'), 'text', None)
 
-        logger.info(f'PRICE: {price}')
+        print(f'PRICE: {price}')
 
         if price is not None and 'N/A' not in price and 'PI' not in price:
             price = float(price[price.find('$') + 1:])
 
             price_map = PriceMap.objects.filter(usd=price).first()
 
-            logger.info(f'PRICE_MAP: {price_map}')
+            print(f'PRICE_MAP: {price_map}')
 
             if price_map is not None:
                 self.cached_data['price_map'] = price_map
