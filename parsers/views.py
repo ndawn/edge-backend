@@ -9,7 +9,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from rest_framework.status import HTTP_404_NOT_FOUND
+from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 
 
 PERFORMER_MODULES = {
@@ -69,3 +69,27 @@ class ParseSessionViewSet(ModelViewSet):
             return Response({'progress': session.item_count})
 
         return Response({'progress': ParsedObject.objects.filter(session_id=pk).count()})
+
+    # TODO
+    # @action(detail=True, methods=['get'])
+    # def publishers(self, request, pk=None):
+    #     session = self.get_object()
+    #
+    #     if not session.ready():
+    #         return Response(
+    #             {'error': 'Сессия еще активна'},
+    #             status=HTTP_400_BAD_REQUEST,
+    #         )
+    #
+    #     queryset = ParsedObject.objects.filter(session_id=session.id).select_related('task')
+    #
+    #     return Response({'publishers': })
+    #
+    # @action(detail=True, methods=['get'])
+    # def categories(self, request, pk=None):
+    #     session = self.get_object()
+    #
+    #     if not session.ready():
+    #         return Response({'progress': session.item_count})
+    #
+    #     return Response({'progress': ParsedObject.objects.filter(session_id=pk).count()})
