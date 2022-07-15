@@ -21,7 +21,7 @@ decorator==4.4.0
 demjson==2.2.4
 Django==2.2.2
 django-celery==3.3.0
-django-celery-results==1.1.2
+django-celery-results==2.4.0
 django-extensions==2.1.9
 django-filter==2.2.0
 django-rest-framework==0.1.0
